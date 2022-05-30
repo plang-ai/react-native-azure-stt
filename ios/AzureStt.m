@@ -7,7 +7,7 @@
 #import <MicrosoftCognitiveServicesSpeech/SPXSpeechApi.h>
 
 @interface AzureStt ()
-    
+
 @end
 
 @implementation AzureStt
@@ -60,7 +60,7 @@
         }
         NSLog(@"call stopContinuousRecognition");
     });
-    
+
 }
 
 - (void) startTimer:(NSTimeInterval)inteval {
@@ -73,7 +73,7 @@
 }
 
 - (void) stopTimer {
-    
+
     if (self->timer) {
         [self->timer invalidate];
         self->timer = nil;
@@ -109,7 +109,7 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
     __weak AzureStt *stt = self;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         [stt teardown];
-        
+
 //        NSString* pronunciationAssessmentReferenceText = @"Hello world.";
         SPXSpeechConfiguration *speechConfig = [[SPXSpeechConfiguration alloc] initWithSubscription:sub region:@"koreacentral"];
         if (!speechConfig) {
@@ -122,10 +122,10 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
         SPXAudioConfiguration *audioConfig = [[SPXAudioConfiguration alloc]initWithStreamInput:stream];
 
         self->speechRecognizer = [[SPXSpeechRecognizer alloc] initWithSpeechConfiguration:speechConfig audioConfiguration:audioConfig];
-                
+
 //        SPXPhraseListGrammar * phraseListGrammar = [[SPXPhraseListGrammar alloc] initWithRecognizer:self->speechRecognizer];
 //        [phraseListGrammar addPhrase:@"And worst of all, Angela is considering going home."];
-        
+
         if (!self->speechRecognizer) {
             NSLog(@"Could not create speech recognizer");
             [self sendEventWithName:@"onSpeechError" body:@{@"error": @{@"code": @"recognition_fail"}}];
@@ -140,10 +140,12 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
     //                                             enableMiscue:true];
 
     //    [pronunicationConfig applyToRecognizer:speechRecognizer];
-        
+
         [self->speechRecognizer addRecognizingEventHandler: ^ (SPXSpeechRecognizer *recognizer, SPXSpeechRecognitionEventArgs *eventArgs) {
             NSLog(@"Received intermediate result event. SessionId: %@, recognition result:%@. Status %ld. offset %llu duration %llu resultid:%@", eventArgs.sessionId, eventArgs.result.text, (long)eventArgs.result.reason, eventArgs.result.offset, eventArgs.result.duration, eventArgs.result.resultId);
-            
+            if ([eventArgs.result.text length] == 0) {
+                return;
+            }
             NSMutableArray* transcriptions = [NSMutableArray new];
             [transcriptions addObject:eventArgs.result.text];
             [stt startTimer:3.0];
@@ -153,6 +155,9 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
         [self->speechRecognizer addRecognizedEventHandler: ^ (SPXSpeechRecognizer *recognizer, SPXSpeechRecognitionEventArgs *eventArgs) {
             NSLog(@"Received final result event. SessionId: %@, recognition result:%@. Status %ld. offset %llu duration %llu resultid:%@", eventArgs.sessionId, eventArgs.result.text, (long)eventArgs.result.reason, eventArgs.result.offset, eventArgs.result.duration, eventArgs.result.resultId);
             [stt teardown];
+            if ([eventArgs.result.text length] == 0) {
+                return;
+            }
             NSMutableArray* transcriptionDics = [NSMutableArray new];
             [transcriptionDics addObject:eventArgs.result.text];
             [stt sendEventWithName:@"onSpeechResults" body:@{@"value":@[eventArgs.result.text]} ];
@@ -165,17 +170,17 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
             [stt teardown];
             [stt sendEventWithName:@"onSpeechEnd" body:nil];
         }];
-        
+
         [self->speechRecognizer addCanceledEventHandler:^(SPXSpeechRecognizer * recognizer, SPXSpeechRecognitionCanceledEventArgs *eventArgs) {
             NSLog(@"Received session canceled event.");
             [stt teardown];
         }];
-        
+
         [self->speechRecognizer addSessionStartedEventHandler:^(SPXRecognizer * recognizer, SPXSessionEventArgs *eventArgs) {
             NSLog(@"Received session started event.");
             [stt sendEventWithName:@"onSpeechStart" body:nil];
         }];
-        
+
         bool result = [self->recorder record];
         if (result) {
             [self->speechRecognizer startContinuousRecognition];
