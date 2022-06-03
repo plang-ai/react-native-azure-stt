@@ -44,21 +44,25 @@
 }
 
 - (void) teardown {
+    NSLog(@"azure: teardown");
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         [self stopTimer];
         if (self->recorder) {
             // End recognition request
-            NSLog(@"call stop recording");
+            NSLog(@"azure: call stop recording");
             [self->recorder stop];
             self->recorder = nil;
         }
         if (self->speechRecognizer) {
-            NSLog(@"call stopContinuousRecognition");
+            NSLog(@"azure:call stopContinuousRecognition");
             SPXSpeechRecognizer* instance = self->speechRecognizer;
             self->speechRecognizer = nil;
             [instance stopContinuousRecognition];
         }
-        NSLog(@"call stopContinuousRecognition");
+        if (self->allTimer) {
+            [self->allTimer invalidate];
+            self->timer = nil;
+        }
     });
 
 }
@@ -73,7 +77,6 @@
 }
 
 - (void) stopTimer {
-
     if (self->timer) {
         [self->timer invalidate];
         self->timer = nil;
@@ -108,12 +111,11 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
         repeats:NO];
     __weak AzureStt *stt = self;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        [stt teardown];
-
 //        NSString* pronunciationAssessmentReferenceText = @"Hello world.";
         SPXSpeechConfiguration *speechConfig = [[SPXSpeechConfiguration alloc] initWithSubscription:sub region:@"koreacentral"];
         if (!speechConfig) {
-            NSLog(@"Could not load speech config");
+            NSLog(@"azure:Could not load speech config");
+            [self sendEventWithName:@"onSpeechError" body:@{@"error": @{@"code": @"recognition_fail"}}];
             return;
         }
 
@@ -127,7 +129,7 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
 //        [phraseListGrammar addPhrase:@"And worst of all, Angela is considering going home."];
 
         if (!self->speechRecognizer) {
-            NSLog(@"Could not create speech recognizer");
+            NSLog(@"azure:Could not create speech recognizer");
             [self sendEventWithName:@"onSpeechError" body:@{@"error": @{@"code": @"recognition_fail"}}];
             return;
         }
@@ -142,7 +144,7 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
     //    [pronunicationConfig applyToRecognizer:speechRecognizer];
 
         [self->speechRecognizer addRecognizingEventHandler: ^ (SPXSpeechRecognizer *recognizer, SPXSpeechRecognitionEventArgs *eventArgs) {
-            NSLog(@"Received intermediate result event. SessionId: %@, recognition result:%@. Status %ld. offset %llu duration %llu resultid:%@", eventArgs.sessionId, eventArgs.result.text, (long)eventArgs.result.reason, eventArgs.result.offset, eventArgs.result.duration, eventArgs.result.resultId);
+            NSLog(@"azure:Received intermediate result event. SessionId: %@, recognition result:%@. Status %ld. offset %llu duration %llu resultid:%@", eventArgs.sessionId, eventArgs.result.text, (long)eventArgs.result.reason, eventArgs.result.offset, eventArgs.result.duration, eventArgs.result.resultId);
             if ([eventArgs.result.text length] == 0) {
                 return;
             }
@@ -153,7 +155,7 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
         }];
 
         [self->speechRecognizer addRecognizedEventHandler: ^ (SPXSpeechRecognizer *recognizer, SPXSpeechRecognitionEventArgs *eventArgs) {
-            NSLog(@"Received final result event. SessionId: %@, recognition result:%@. Status %ld. offset %llu duration %llu resultid:%@", eventArgs.sessionId, eventArgs.result.text, (long)eventArgs.result.reason, eventArgs.result.offset, eventArgs.result.duration, eventArgs.result.resultId);
+            NSLog(@"azure:Received final result event. SessionId: %@, recognition result:%@. Status %ld. offset %llu duration %llu resultid:%@", eventArgs.sessionId, eventArgs.result.text, (long)eventArgs.result.reason, eventArgs.result.offset, eventArgs.result.duration, eventArgs.result.resultId);
             [stt teardown];
             if ([eventArgs.result.text length] == 0) {
                 return;
@@ -165,19 +167,19 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
 
         __block bool end = false;
         [self->speechRecognizer addSessionStoppedEventHandler: ^ (SPXRecognizer *recognizer, SPXSessionEventArgs *eventArgs) {
-            NSLog(@"Received session stopped event. SessionId: %@", eventArgs.sessionId);
+            NSLog(@"azure:Received session stopped event. SessionId: %@", eventArgs.sessionId);
             end = true;
             [stt teardown];
             [stt sendEventWithName:@"onSpeechEnd" body:nil];
         }];
 
         [self->speechRecognizer addCanceledEventHandler:^(SPXSpeechRecognizer * recognizer, SPXSpeechRecognitionCanceledEventArgs *eventArgs) {
-            NSLog(@"Received session canceled event.");
+            NSLog(@"azure:Received session canceled event.");
             [stt teardown];
         }];
 
         [self->speechRecognizer addSessionStartedEventHandler:^(SPXRecognizer * recognizer, SPXSessionEventArgs *eventArgs) {
-            NSLog(@"Received session started event.");
+            NSLog(@"azure:Received session started event.");
             [stt sendEventWithName:@"onSpeechStart" body:nil];
         }];
 
@@ -185,7 +187,7 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)sub)
         if (result) {
             [self->speechRecognizer startContinuousRecognition];
         } else {
-            [self sendEventWithName:@"onSpeechError" body:@{@"error": @{@"code": @"recognition_fail"}}];
+            [self sendEventWithName:@"azure:onSpeechError" body:@{@"error": @{@"code": @"recognition_fail"}}];
         }
     });
 }

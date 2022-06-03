@@ -38,7 +38,7 @@ static const int kNumberBuffers = 3;
                                              0,
                                              &queueRef);
         if (status != noErr) {
-            NSLog(@"new input error");
+            NSLog(@"azure:new input error");
         }
 
         for (int i = 0; i < kNumberBuffers; i++) {
@@ -47,7 +47,7 @@ static const int kNumberBuffers = 3;
         }
 
         if (status != noErr) {
-            NSLog(@"create recorder file failure");
+            NSLog(@"azure:create recorder file failure");
         }
     }
     return self;
@@ -83,11 +83,11 @@ static void recorderCallBack(void *aqData,
 
     OSStatus status = AudioQueueStart(queueRef, NULL);
     if (status != noErr) {
-        NSLog(@"start queue failure");
+        NSLog(@"azure:start queue failure");
         return false;
     }
     _isRunning = true;
-    
+
     return true;
 }
 
