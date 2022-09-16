@@ -26,6 +26,11 @@
     return self;
 }
 
++ (BOOL)requiresMainQueueSetup
+{
+  return YES;
+}
+
 - (NSArray<NSString *> *)supportedEvents
 {
     return @[
